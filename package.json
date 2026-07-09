@@ -1,0 +1,49 @@
+{
+  "name": "tokwise",
+  "version": "0.1.0",
+  "description": "Local CLI to analyze AI coding agent token usage, cost, MCP/skills waste, and optimization tips (Claude, Codex, Cursor, Gemini, and more)",
+  "type": "module",
+  "bin": {
+    "tokwise": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && node scripts/postbuild.mjs",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "test": "tsx --test test/**/*.test.ts",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "token-usage",
+    "cost",
+    "ai-coding",
+    "mcp",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^13.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
