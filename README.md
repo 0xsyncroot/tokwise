@@ -1,23 +1,31 @@
-# tokwise
+# tokusage
 
 Local CLI to analyze **AI coding agent** token usage, cost, MCP/skills waste, and optimization tips.
 
+> Published as `tokusage` on npm (project source lives at [0xsyncroot/tokwise](https://github.com/0xsyncroot/tokwise) — `tokwise` was already taken on the npm registry).
+
 ```bash
-npx tokwise
-npx tokwise --lang vi
-npx tokwise --from 2026-07-01 --to 2026-07-09
-npx tokwise --all --provider claude,codex
-npx tokwise detect
-npx tokwise inventory
-npx tokwise advice
-npx tokwise session <id>
+npx tokusage
+npx tokusage --lang vi
+npx tokusage --from 2026-07-01 --to 2026-07-09
+npx tokusage --all --provider claude,codex
+npx tokusage detect
+npx tokusage inventory
+npx tokusage advice
+npx tokusage session <id>
+```
+
+Or straight from source without a registry, using the same commands:
+
+```bash
+npx github:0xsyncroot/tokwise
 ```
 
 100% local — reads session logs on disk. No API keys. No uploads.
 
 Token totals reconcile with `ccusage` to within ~0.1% (Claude + Codex), while also
 excluding Codex fork-replay double counting. Repeat runs are fast: parsed files are
-cached per (path, mtime, size) in `~/.cache/tokwise/` — first run pays the full parse,
+cached per (path, mtime, size) in `~/.cache/tokusage/` — first run pays the full parse,
 subsequent runs take ~1–2s. Disable with `TOKWISE_NO_CACHE=1`.
 
 ## Implemented collectors (v0.1)
@@ -32,7 +40,7 @@ subsequent runs take ~1–2s. Disable with `TOKWISE_NO_CACHE=1`.
 | Antigravity | `~/.gemini/antigravity/conversations/*.pb` | sessions-only |
 | Cline | `~/.cline/data/tasks` + VS Code globalStorage | full |
 
-~40 more provider IDs are registered for `tokwise detect` (stubs) — path matrix from CodeBurn / Tokscale / continues / agentscrub.
+~40 more provider IDs are registered for `tokusage detect` (stubs) — path matrix from CodeBurn / Tokscale / continues / agentscrub.
 
 ## Pricing
 
@@ -52,7 +60,7 @@ Sonnet 5/4.x, Haiku), OpenAI (GPT-5.x incl. 5.4/5.5, codex, o-series), and Googl
 - **Antigravity**: on-disk data has no token counts (sessions-only) — cost is always $0,
   never fabricated.
 
-Override any rate via `~/.config/tokwise/pricing.json` (or `TOKWISE_PRICING_FILE`):
+Override any rate via `~/.config/tokusage/pricing.json` (or `TOKWISE_PRICING_FILE`):
 
 ```json
 { "models": [{ "match": "gpt-5.5", "provider": "codex", "rates": { "input": 5, "output": 30, "cacheRead": 0.5, "cacheWrite": 0 } }] }
@@ -60,7 +68,7 @@ Override any rate via `~/.config/tokwise/pricing.json` (or `TOKWISE_PRICING_FILE
 
 ## Inventory
 
-`tokwise inventory` compares **declared** MCP/skills (e.g. `~/.claude.json` `mcpServers`, `~/.claude/skills`) vs **used** tool calls in sessions, then suggests OFF / archive with estimated savings.
+`tokusage inventory` compares **declared** MCP/skills (e.g. `~/.claude.json` `mcpServers`, `~/.claude/skills`) vs **used** tool calls in sessions, then suggests OFF / archive with estimated savings.
 
 ## License
 

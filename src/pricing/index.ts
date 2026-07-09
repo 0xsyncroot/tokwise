@@ -162,7 +162,7 @@ function userPricingPath(): string {
   if (env && env.trim()) return env.trim();
   const xdg = process.env.XDG_CONFIG_HOME;
   const base = xdg && xdg.trim() ? xdg.trim() : join(homedir(), ".config");
-  return join(base, "tokwise", "pricing.json");
+  return join(base, "tokusage", "pricing.json");
 }
 
 function loadUserRows(): UserRow[] {

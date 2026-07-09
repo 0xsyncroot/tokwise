@@ -22,7 +22,7 @@ function cacheDir(): string {
   if (env && env.trim()) return env.trim();
   const xdg = process.env.XDG_CACHE_HOME;
   const base = xdg && xdg.trim() ? xdg.trim() : join(homedir(), ".cache");
-  return join(base, "tokwise");
+  return join(base, "tokusage");
 }
 
 export class FileParseCache {

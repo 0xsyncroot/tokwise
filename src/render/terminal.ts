@@ -111,7 +111,7 @@ export function renderReport(
   const dayCount = new Set(report.byDay.map((d) => d.date)).size || 1;
 
   lines.push(
-    pc.bold(pc.magenta("tokwise")) +
+    pc.bold(pc.magenta("tokusage")) +
       "  " +
       pc.dim(`${t(lang, "range")}: `) +
       pc.bold(report.range.label) +

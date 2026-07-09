@@ -16,7 +16,7 @@ import {
 const program = new Command();
 
 program
-  .name("tokwise")
+  .name("tokusage")
   .description("Analyze local AI coding agent token usage, cost, and optimization tips")
   .version("0.1.0")
   .argument("[day]", "YYYY-MM-DD (default: today)")
