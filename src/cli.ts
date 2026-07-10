@@ -30,7 +30,7 @@ program
       "Reads session logs already on disk (Claude Code, Codex, Gemini CLI, Cursor, Copilot, ...).\n" +
       "100% local: no API keys, no network calls, nothing uploaded.",
   )
-  .version("0.2.0", "-V, --version", "output the installed tokusage version")
+  .version("0.2.1", "-V, --version", "output the installed tokusage version")
   .argument("[day]", "report for one day, YYYY-MM-DD (default: today)")
   .option("--from <date>", "range start, YYYY-MM-DD (use with --to)")
   .option("--to <date>", "range end, YYYY-MM-DD (use with --from)")
