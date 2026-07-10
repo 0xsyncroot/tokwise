@@ -5,6 +5,8 @@ import { costUsd, formatTokens, ratesForModel } from "../src/pricing/index.js";
 import { aggregate } from "../src/aggregate.js";
 import { buildAdvice, buildInventory } from "../src/advice/index.js";
 import { classifyTool } from "../src/providers/_shared/io.js";
+import { renderHtmlReport } from "../src/render/html.js";
+import { defaultReportPath, slugRangeLabel, stateRoot } from "../src/paths.js";
 import type { UsageEvent } from "../src/types.js";
 
 describe("dates", () => {
@@ -276,6 +278,11 @@ describe("aggregate + advice", () => {
     const s = report.sessions[0];
     assert.equal(s.costUsd, 6); // 5 + 1, not 2 (all-haiku) or 10 (all-opus)
     assert.deepEqual(s.models, ["claude-haiku-4-5", "claude-opus-4-8"]);
+    assert.equal(s.modelBreakdown.length, 2);
+    assert.equal(s.modelBreakdown[0].model, "claude-opus-4-8");
+    assert.equal(s.modelBreakdown[0].costUsd, 5);
+    assert.equal(s.modelBreakdown[1].model, "claude-haiku-4-5");
+    assert.equal(s.modelBreakdown[1].costUsd, 1);
   });
 
   it("honors rawCost at session and provider level", () => {
@@ -367,5 +374,105 @@ describe("aggregate + advice", () => {
     const findings = buildAdvice(report, inv);
     assert.ok(findings.length >= 1);
     assert.ok(findings.some((f) => f.id === "tools.low_read_edit" || f.id === "session.too_many_short" || f.id === "session.expensive"));
+  });
+});
+
+describe("html report", () => {
+  it("renders detailed tables with escaped content", () => {
+    const range = resolveDateRange({ from: "2026-07-01", to: "2026-07-09" });
+    const events: UsageEvent[] = [
+      {
+        provider: "claude",
+        sessionId: "s<script>",
+        project: "proj/<x>",
+        model: "claude-sonnet-4",
+        timestamp: new Date(2026, 6, 5, 10),
+        inputTokens: 10_000,
+        outputTokens: 1_000,
+        cacheReadTokens: 2_000,
+        cacheWriteTokens: 500,
+        reasoningTokens: 100,
+        requestCount: 2,
+        tools: [{ name: "Read", kind: "system", count: 3 }],
+      },
+      {
+        provider: "codex",
+        sessionId: "c1",
+        model: "gpt-5",
+        timestamp: new Date(2026, 6, 6),
+        inputTokens: 5_000,
+        outputTokens: 500,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        reasoningTokens: 0,
+        requestCount: 1,
+        tools: [],
+      },
+    ];
+    const report = aggregate(events, range, 5);
+    // Simulate enriched transcript details
+    report.sessions[0].prompts = ['Fix the <bug> in "auth"'];
+    report.sessions[0].userTurns = 3;
+    report.sessions[0].sourcePath = "/tmp/proj/s<script>.jsonl";
+    report.sessions[0].title = "Auth fix";
+    report.sessions[0].model = "claude-sonnet-4";
+    report.sessions[0].models = ["claude-sonnet-4"];
+    report.sessions[0].thinkingBlocks = 2;
+    report.sessions[0].thinkingTokensEst = 1600;
+    report.sessions[0].turns = [
+      {
+        index: 1,
+        prompt: 'Fix the <bug> in "auth"',
+        model: "claude-sonnet-4",
+        aiAction: "I'll patch auth.ts · Tools (2): Read, Edit · Thinking: 2 block(s) ≈ 1,600 tok",
+        output: "Patched the null check in auth.ts.",
+        tools: [
+          { name: "Read", count: 1 },
+          { name: "Edit", count: 1 },
+        ],
+        thinkingBlocks: 2,
+        thinkingTokensEst: 1600,
+        thinkingRedacted: true,
+        outputTokensEst: 10,
+        assistantMessages: 2,
+      },
+    ];
+    const inv = buildInventory(events, report);
+    const findings = buildAdvice(report, inv);
+    const html = renderHtmlReport("vi", report, findings, { inventory: inv });
+    assert.match(html, /<!DOCTYPE html>/);
+    assert.match(html, /Theo nền tảng/);
+    assert.match(html, /row-drill/);
+    assert.match(html, /tr class="nested" hidden/);
+    assert.match(html, /s&lt;script&gt;/);
+    assert.match(html, /proj\/&lt;x&gt;/);
+    assert.match(html, /id="sessions"/);
+    assert.match(html, /id="by-provider"/);
+    assert.match(html, /id="models"/);
+    assert.match(html, /Chi tiết token|token-grid/);
+    assert.match(html, /Bấm ▶/);
+    assert.match(html, /Prompt người dùng/);
+    assert.match(html, /Fix the &lt;bug&gt; in &quot;auth&quot;/);
+    assert.match(html, /Review session/);
+    assert.match(html, /model-tag/);
+    assert.match(html, /sonnet-4/);
+    assert.match(html, /AI đã làm gì/);
+    assert.match(html, /Output của AI/);
+    assert.match(html, /Patched the null check/);
+    assert.match(html, /Thinking \(ước lượng\)/);
+  });
+});
+
+describe("paths", () => {
+  it("builds report path under state/reports", () => {
+    const p = defaultReportPath("2026-07-01 → 2026-07-09", new Date(2026, 6, 10, 12, 30, 5));
+    assert.ok(p.includes(stateRoot()));
+    assert.ok(p.includes("/reports/"));
+    assert.match(p, /report-2026-07-01_to_2026-07-09-20260710-123005\.html$/);
+  });
+
+  it("slugs range labels safely", () => {
+    assert.equal(slugRangeLabel("2026-07-01 → 2026-07-09"), "2026-07-01_to_2026-07-09");
+    assert.equal(slugRangeLabel("all"), "all");
   });
 });

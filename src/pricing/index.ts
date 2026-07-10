@@ -1,6 +1,6 @@
 /**
  * USD per 1M tokens, resolved per provider + model.
- * Override via ~/.config/tokwise/pricing.json (or TOKWISE_PRICING_FILE):
+ * Override via ~/.config/tokusage/pricing.json (or TOKWISE_PRICING_FILE):
  *   { "models": [{ "match": "gpt-5", "provider": "codex", "rates": { "input": 1.25, ... } }] }
  *
  * Notes on semantics per platform:
@@ -14,8 +14,8 @@
  * - Long-context (>200k) Gemini tiers are not modeled.
  */
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { configRoot } from "../paths.js";
 
 export interface ModelRates {
   input: number;
@@ -149,7 +149,7 @@ const PROVIDER_DEFAULTS: Record<string, ModelRates> = {
   antigravity: ZERO,
 };
 
-// --- user overrides (~/.config/tokwise/pricing.json) ---
+// --- user overrides (~/.config/tokusage/pricing.json) ---
 
 interface UserRow extends Row {
   provider?: string;
@@ -160,9 +160,7 @@ let userRowsCache: UserRow[] | null = null;
 function userPricingPath(): string {
   const env = process.env.TOKWISE_PRICING_FILE;
   if (env && env.trim()) return env.trim();
-  const xdg = process.env.XDG_CONFIG_HOME;
-  const base = xdg && xdg.trim() ? xdg.trim() : join(homedir(), ".config");
-  return join(base, "tokusage", "pricing.json");
+  return join(configRoot(), "pricing.json");
 }
 
 function loadUserRows(): UserRow[] {

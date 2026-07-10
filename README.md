@@ -9,11 +9,21 @@ npx tokusage
 npx tokusage --lang vi
 npx tokusage --from 2026-07-01 --to 2026-07-09
 npx tokusage --all --provider claude,codex
+npx tokusage --out ./report.html --from 2026-07-01 --to 2026-07-09
+npx tokusage --no-html
 npx tokusage detect
 npx tokusage inventory
 npx tokusage advice
 npx tokusage session <id>
 ```
+
+By default the report command also writes a drill-down HTML report under
+`~/.local/state/tokusage/reports/` (XDG state; override with `TOKWISE_STATE_DIR` /
+`XDG_STATE_HOME`). Language follows `--lang`. Override the path with `--out <file>`;
+skip with `--no-html`.
+
+**Note:** older versions wrote `tokusage-report.html` into the current working directory;
+that default is gone — reports now live under the XDG state path above.
 
 Or straight from source without a registry, using the same commands:
 

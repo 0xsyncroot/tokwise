@@ -50,6 +50,32 @@ export interface ProviderInfo {
   collect: (range: DateRange) => Promise<UsageEvent[]>;
 }
 
+export interface SessionTurnDetail {
+  index: number;
+  /** Cleaned user prompt for this turn */
+  prompt: string;
+  /** Model that answered this turn (from assistant messages) */
+  model?: string;
+  /** Short human-readable description of what the AI did */
+  aiAction: string;
+  /** First meaningful assistant text reply (may be missing if redacted) */
+  output?: string;
+  /** Tools used while answering this prompt */
+  tools: Array<{ name: string; count: number }>;
+  /** Number of thinking/reasoning blocks observed */
+  thinkingBlocks: number;
+  /**
+   * Estimated thinking/reasoning tokens for this turn.
+   * Prefer usage.output_tokens on thinking-only messages; else chars/4; else block floor.
+   */
+  thinkingTokensEst: number;
+  /** True when thinking blocks exist but body text is empty/redacted */
+  thinkingRedacted: boolean;
+  /** Estimated visible output text tokens (chars/4) */
+  outputTokensEst: number;
+  assistantMessages: number;
+}
+
 export interface SessionSummary {
   provider: string;
   sessionId: string;
@@ -57,6 +83,8 @@ export interface SessionSummary {
   model?: string;
   /** distinct models seen in this session (mixed-model sessions are priced per event) */
   models: string[];
+  /** per-model cost/tokens within this session (from usage events) */
+  modelBreakdown: ModelSummary[];
   start: Date;
   end: Date;
   requests: number;
@@ -69,6 +97,20 @@ export interface SessionSummary {
   tools: ToolUse[];
   systemPromptTokens: number;
   estimated: boolean;
+  /** Absolute path to the primary transcript file when known */
+  sourcePath?: string;
+  /** @deprecated prefer turns[].prompt — kept for simple lists */
+  prompts: string[];
+  /** Count of user turns (non-tool-result) seen in the transcript */
+  userTurns: number;
+  /** Auto title from transcript (e.g. Claude ai-title) when present */
+  title?: string;
+  /** Per-prompt review cards loaded from the real transcript */
+  turns: SessionTurnDetail[];
+  /** Session-level thinking block count */
+  thinkingBlocks: number;
+  /** Session-level estimated thinking tokens */
+  thinkingTokensEst: number;
 }
 
 export interface ModelSummary {

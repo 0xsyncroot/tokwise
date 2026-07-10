@@ -1,6 +1,6 @@
 {
   "name": "tokusage",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local CLI to analyze AI coding agent token usage, cost, MCP/skills waste, and optimization tips (Claude, Codex, Cursor, Gemini, and more)",
   "type": "module",
   "bin": {

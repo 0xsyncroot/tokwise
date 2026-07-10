@@ -55,6 +55,7 @@ export function aggregate(events: UsageEvent[], range: DateRange, topN = 10): Ag
         project: e.project,
         model: e.model,
         models: [],
+        modelBreakdown: [],
         start: e.timestamp,
         end: e.timestamp,
         requests: 0,
@@ -67,6 +68,11 @@ export function aggregate(events: UsageEvent[], range: DateRange, topN = 10): Ag
         tools: [],
         systemPromptTokens: 0,
         estimated: false,
+        prompts: [],
+        userTurns: 0,
+        turns: [],
+        thinkingBlocks: 0,
+        thinkingTokensEst: 0,
       };
       sessionMap.set(key, s);
       sessionModels.set(key, new Set());
@@ -96,6 +102,50 @@ export function aggregate(events: UsageEvent[], range: DateRange, topN = 10): Ag
 
   for (const [key, s] of sessionMap) {
     s.models = [...(sessionModels.get(key) ?? [])].sort();
+  }
+
+  // Per-session model breakdown from events
+  const sessionModelMap = new Map<string, Map<string, ModelSummary>>();
+  for (const e of events) {
+    const sKey = `${e.provider}::${e.sessionId}`;
+    if (!sessionMap.has(sKey)) continue;
+    let byModel = sessionModelMap.get(sKey);
+    if (!byModel) {
+      byModel = new Map();
+      sessionModelMap.set(sKey, byModel);
+    }
+    const model = e.model || "unknown";
+    let row = byModel.get(model);
+    if (!row) {
+      row = {
+        provider: e.provider,
+        model,
+        requests: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        reasoningTokens: 0,
+        tokens: 0,
+        costUsd: 0,
+        estimated: false,
+      };
+      byModel.set(model, row);
+    }
+    row.requests += e.requestCount;
+    row.inputTokens += e.inputTokens;
+    row.outputTokens += e.outputTokens;
+    row.cacheReadTokens += e.cacheReadTokens;
+    row.cacheWriteTokens += e.cacheWriteTokens;
+    row.reasoningTokens += e.reasoningTokens;
+    row.tokens += e.inputTokens + e.outputTokens + e.cacheReadTokens + e.cacheWriteTokens;
+    row.costUsd += eventCost(e);
+    if (e.estimated) row.estimated = true;
+  }
+  for (const [sKey, byModel] of sessionModelMap) {
+    const s = sessionMap.get(sKey);
+    if (!s) continue;
+    s.modelBreakdown = [...byModel.values()].sort((a, b) => b.costUsd - a.costUsd);
   }
 
   const sessions = [...sessionMap.values()].sort((a, b) => b.costUsd - a.costUsd);

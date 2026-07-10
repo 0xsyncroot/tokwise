@@ -3,13 +3,13 @@
  * (mtimeMs, size) is unchanged re-yields the exact same events, so repeat
  * runs skip re-reading hundreds of MB of jsonl.
  *
- * Location: $TOKWISE_CACHE_DIR | $XDG_CACHE_HOME/tokwise | ~/.cache/tokwise
+ * Location: $TOKWISE_CACHE_DIR | $XDG_CACHE_HOME/tokusage | ~/.cache/tokusage
  * Disable with TOKWISE_NO_CACHE=1. Bump the cache name (e.g. claude-v3) when
  * the parser changes so stale entries are ignored wholesale.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { cacheRoot } from "../../paths.js";
 
 interface Slot {
   mtimeMs: number;
@@ -18,11 +18,7 @@ interface Slot {
 }
 
 function cacheDir(): string {
-  const env = process.env.TOKWISE_CACHE_DIR;
-  if (env && env.trim()) return env.trim();
-  const xdg = process.env.XDG_CACHE_HOME;
-  const base = xdg && xdg.trim() ? xdg.trim() : join(homedir(), ".cache");
-  return join(base, "tokusage");
+  return cacheRoot();
 }
 
 export class FileParseCache {

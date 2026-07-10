@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { writeFileSync, mkdirSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { Command } from "commander";
 import type { Lang } from "./types.js";
 import { resolveDateRange } from "./dates.js";
@@ -12,6 +14,10 @@ import {
   renderReport,
   renderSession,
 } from "./render/terminal.js";
+import { renderHtmlReport } from "./render/html.js";
+import { t } from "./i18n/index.js";
+import { defaultReportPath } from "./paths.js";
+import { enrichSessionDetails } from "./session-detail.js";
 
 const program = new Command();
 
@@ -25,8 +31,13 @@ program
   .option("--all", "All sessions", false)
   .option("--lang <lang>", "en | vi", "en")
   .option("--provider <list>", "Comma-separated provider ids")
-  .option("--json", "JSON output", false)
-  .option("--top <n>", "Top sessions", "10")
+  .option("--json", "JSON output (skips terminal + HTML)", false)
+  .option("--no-html", "Skip writing the HTML report (HTML is on by default)")
+  .option(
+    "--out <file>",
+    "HTML output path (default: ~/.local/state/tokusage/reports/report-<range>-<timestamp>.html)",
+  )
+  .option("--top <n>", "Top sessions (terminal); HTML includes all sessions", "10")
   .action(async (day: string | undefined, opts) => {
     await runReport({ day, ...opts });
   });
@@ -153,6 +164,17 @@ program
     console.log(renderSession(lang, report, id, findings));
   });
 
+function writeHtml(html: string, outPath: string | undefined, rangeLabel: string): string {
+  const path = outPath
+    ? isAbsolute(outPath)
+      ? outPath
+      : resolve(outPath)
+    : defaultReportPath(rangeLabel);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, html, "utf8");
+  return path;
+}
+
 async function runReport(opts: {
   day?: string;
   from?: string;
@@ -161,6 +183,9 @@ async function runReport(opts: {
   lang?: string;
   provider?: string;
   json?: boolean;
+  /** Commander --no-html sets this to false; default true */
+  html?: boolean;
+  out?: string;
   top?: string;
 }) {
   const lang = (opts.lang as Lang) || "en";
@@ -184,7 +209,24 @@ async function runReport(opts: {
     console.log(JSON.stringify({ report, findings, inventory }, null, 2));
     return;
   }
+
+  // HTML on by default. --no-html always skips (even with --out).
+  const writeHtmlReport = opts.html !== false;
+  let htmlPath: string | undefined;
+  if (writeHtmlReport) {
+    // Load real transcript prompts for review (claude + cursor-agent)
+    await enrichSessionDetails(report.sessions);
+    const html = renderHtmlReport(lang, report, findings, { inventory });
+    htmlPath = writeHtml(html, opts.out, report.range.label);
+  }
+
   console.log(renderReport(lang, report, findings));
+
+  if (htmlPath) {
+    console.log("");
+    console.log(t(lang, "htmlWritten", { path: htmlPath }));
+    console.log(t(lang, "htmlSeeDetails", { path: htmlPath }));
+  }
 }
 
 // silence unused
