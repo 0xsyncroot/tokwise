@@ -24,7 +24,7 @@ const program = new Command();
 program
   .name("tokusage")
   .description("Analyze local AI coding agent token usage, cost, and optimization tips")
-  .version("0.1.0")
+  .version("0.2.0")
   .argument("[day]", "YYYY-MM-DD (default: today)")
   .option("--from <date>", "Range start YYYY-MM-DD")
   .option("--to <date>", "Range end YYYY-MM-DD")
