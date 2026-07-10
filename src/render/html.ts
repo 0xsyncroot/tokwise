@@ -11,7 +11,7 @@ import type {
 import { t, type MsgKey } from "../i18n/index.js";
 import { formatTokens, formatUsd } from "../pricing/index.js";
 import { formatYmd } from "../dates.js";
-import { shortSourcePath, formatModelTag } from "../session-detail.js";
+import { shortSourcePath, formatModelTag, TURN_DETAIL_PROVIDERS } from "../session-detail.js";
 import { sessionFindings } from "../advice/index.js";
 
 function esc(s: string | number | undefined | null): string {
@@ -41,6 +41,27 @@ function shortProject(p?: string): string {
   const parts = p.replace(/\\/g, "/").split("/").filter(Boolean);
   const tail = parts.slice(-2).join("/");
   return tail.length > 36 ? "…" + tail.slice(-35) : tail;
+}
+
+const EXPAND_PREVIEW_CHARS = 320;
+
+/**
+ * Renders long turn text (prompt/output) as a short preview with a native
+ * <details> "show full" expander — no JS needed. Short text renders as a
+ * plain <p>. The <details> body holds only the remainder past the preview,
+ * so expanding appends rather than duplicating the visible text.
+ */
+function expandableBlock(lang: Lang, text: string, cls: string): string {
+  const clean = text.trim();
+  if (clean.length <= EXPAND_PREVIEW_CHARS) {
+    return `<p class="${cls}">${esc(clean)}</p>`;
+  }
+  const preview = clean.slice(0, EXPAND_PREVIEW_CHARS);
+  const rest = clean.slice(EXPAND_PREVIEW_CHARS);
+  return `<details class="expand">
+    <summary class="${cls}"><span class="chev">▸</span>${esc(preview)}<span class="more-link"> … ${esc(t(lang, "showMore"))}</span></summary>
+    <p class="${cls} full">${esc(rest)}</p>
+  </details>`;
 }
 
 function costShareBar(cost: number, total: number): string {
@@ -551,6 +572,23 @@ code {
   border-left: 3px solid var(--accent2);
   color: var(--text);
 }
+details.expand { margin: 0; }
+details.expand > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details.expand > summary::-webkit-details-marker { display: none; }
+details.expand > summary .chev {
+  display: inline-block;
+  margin-right: 0.2rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+details.expand[open] > summary .chev { transform: rotate(90deg); }
+details.expand > summary .more-link { color: var(--accent); font-weight: 600; white-space: nowrap; }
+details.expand[open] > summary .more-link { display: none; }
+details.expand > p.full { margin-top: 0.15rem; }
 .turn-stats {
   display: flex; flex-wrap: wrap; gap: 0.4rem 0.85rem;
   margin-top: 0.55rem;
@@ -767,12 +805,16 @@ function sessionDrillRows(lang: Lang, sessions: SessionSummary[], totalCost: num
                 <div class="turn-head">
                   <span class="idx">#${turn.index}</span>
                   ${turn.model ? `<span class="model-tag" title="${esc(turn.model)}">${esc(formatModelTag(turn.model))}</span>` : ""}
-                  ${turn.thinkingBlocks ? `<span title="${esc(t(lang, "thinkingRedacted"))}">${esc(t(lang, "thinkingEst"))}: ~${turn.thinkingTokensEst.toLocaleString()} tok (${turn.thinkingBlocks})</span>` : ""}
+                  ${
+                    turn.thinkingBlocks
+                      ? `<span title="${esc(t(lang, "thinkingRedacted"))}">${esc(t(lang, "thinkingEst"))}: ~${turn.thinkingTokensEst.toLocaleString()} tok (${turn.thinkingBlocks})</span>`
+                      : ""
+                  }
                   ${turn.outputTokensEst ? `<span>${esc(t(lang, "output"))} ≈ ${turn.outputTokensEst.toLocaleString()} tok</span>` : ""}
                 </div>
                 <div class="turn-body">
                   <div class="turn-label">${esc(t(lang, "turnPrompt"))}</div>
-                  <p class="turn-prompt">${esc(turn.prompt)}</p>
+                  ${expandableBlock(lang, turn.prompt, "turn-prompt")}
                   ${
                     turn.aiAction
                       ? `<div class="turn-label">${esc(t(lang, "aiAction"))}</div>
@@ -782,7 +824,7 @@ function sessionDrillRows(lang: Lang, sessions: SessionSummary[], totalCost: num
                   <div class="turn-label">${esc(t(lang, "aiOutput"))}</div>
                   ${
                     turn.output
-                      ? `<p class="turn-output">${esc(turn.output)}</p>`
+                      ? expandableBlock(lang, turn.output, "turn-output")
                       : `<p class="empty">${esc(t(lang, "noOutput"))}</p>`
                   }
                   ${chips ? `<div class="tool-chips">${chips}</div>` : ""}
@@ -790,7 +832,7 @@ function sessionDrillRows(lang: Lang, sessions: SessionSummary[], totalCost: num
               </article>`;
             })
             .join("")}</div>`
-        : `<p class="empty">${esc(t(lang, "noPrompts"))}</p>`;
+        : `<p class="empty">${esc(t(lang, TURN_DETAIL_PROVIDERS.has(s.provider) ? "noPrompts" : "turnDataUnavailable"))}</p>`;
 
       const findingsHtml = findings.length
         ? `<div class="findings" style="margin-top:0.5rem">${findings

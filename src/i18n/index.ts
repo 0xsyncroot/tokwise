@@ -70,6 +70,8 @@ const en = {
   noOutput: "No visible output (redacted or tool-only)",
   sessionTitle: "Title",
   turnPrompt: "Prompt",
+  showMore: "show full",
+  turnDataUnavailable: "No turn-by-turn detail for this provider yet — showing token/cost totals only.",
   // finding titles
   "cache.low_hit_rate.title": "Low cache hit rate",
   "cache.low_hit_rate.why": "Only {rate}% of inputish tokens were cache reads — cold prefixes are expensive.",
@@ -167,6 +169,8 @@ const vi: Record<keyof typeof en, string> = {
   noOutput: "Không có output hiện được (redact hoặc chỉ dùng tool)",
   sessionTitle: "Tiêu đề",
   turnPrompt: "Prompt",
+  showMore: "xem đầy đủ",
+  turnDataUnavailable: "Nền tảng này chưa hỗ trợ xem chi tiết từng lượt (turn) — chỉ hiện tổng token/chi phí.",
   "cache.low_hit_rate.title": "Cache hit thấp",
   "cache.low_hit_rate.why": "Chỉ {rate}% token inputish là cache read — prefix lạnh rất đắt.",
   "cache.low_hit_rate.fix": "Làm việc theo cụm; tránh đổi model/MCP giữa session; đừng idle >5 phút rồi nhắn vào transcript dài.",

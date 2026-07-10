@@ -7,17 +7,30 @@
  * re-reads transcripts for human-readable analysis context.
  */
 import { existsSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { SessionSummary, SessionTurnDetail } from "./types.js";
 import { claudeConfigDirs, cursorProjectsDir } from "./providers/_paths.js";
 import { parseJsonl, walkFiles } from "./providers/_shared/io.js";
+import { FileParseCache } from "./providers/_shared/cache.js";
 
 const MAX_TURNS = 12;
-const MAX_PROMPT_CHARS = 700;
-const MAX_OUTPUT_CHARS = 500;
+// Safety ceiling only — the HTML renderer shows a short preview with a
+// "show full" expander, so this just bounds worst-case report size.
+const MAX_PROMPT_CHARS = 20_000;
+const MAX_OUTPUT_CHARS = 20_000;
 const MAX_ACTION_CHARS = 220;
 /** Floor when a thinking block exists but body is redacted/empty */
 const THINKING_BLOCK_FLOOR = 800;
+
+/**
+ * Providers whose transcripts we re-read for turn-by-turn review (prompt,
+ * output, tools, thinking). Everything else only has aggregate token/cost
+ * totals from the collector — there's no per-turn source to enrich from
+ * (Codex/Gemini/Copilot/Cline/Antigravity collectors extract usage numbers
+ * only, not message content).
+ */
+export const TURN_DETAIL_PROVIDERS = new Set(["claude", "cursor-agent"]);
 
 function stripTags(s: string): string {
   return s
@@ -148,6 +161,7 @@ async function buildPathIndex(): Promise<PathIndex> {
 }
 
 function resolveFromIndex(s: SessionSummary, idx: PathIndex): string | undefined {
+  if (!TURN_DETAIL_PROVIDERS.has(s.provider)) return undefined;
   if (s.sourcePath && existsSync(s.sourcePath)) return s.sourcePath;
   const id = s.sessionId.replace(/^sub:/, "");
   if (s.provider === "claude") return idx.claude.get(id);
@@ -409,8 +423,12 @@ async function extractSessionReview(
       thinkTok = rt.thinkingBlocks * THINKING_BLOCK_FLOOR;
     }
 
-    const output = rt.texts.length ? truncate(rt.texts[0], MAX_OUTPUT_CHARS) : undefined;
-    const outputTokensEst = estTokensFromChars(rt.texts.join("\n").length);
+    // Join every assistant text block in the turn, not just the first — a
+    // turn with tool calls between text blocks (e.g. "let me check…" ...
+    // "done, here's the fix") would otherwise drop everything after block 1.
+    const outputFull = rt.texts.join("\n\n");
+    const output = outputFull ? truncate(outputFull, MAX_OUTPUT_CHARS) : undefined;
+    const outputTokensEst = estTokensFromChars(outputFull.length);
 
     // Prefer real cleaned prompts; demote follow-ups without prompt text
     const promptText =
@@ -467,6 +485,11 @@ export async function enrichSessionDetails(
   if (!targets.length) return;
 
   const idx = await buildPathIndex();
+  // Transcripts are append-only; a file whose (mtime, size) hasn't changed since
+  // the last report re-yields the identical turn review. Collectors already cache
+  // their own usage-event parse this way — this pass re-reads the same files a
+  // second time (for human-readable prompt/output text), so it earns its own cache.
+  const cache = new FileParseCache("session-review-v2");
   const concurrency = 6;
   let i = 0;
 
@@ -481,7 +504,14 @@ export async function enrichSessionDetails(
         const kind =
           s.provider === "cursor-agent" ? "cursor" : s.provider === "claude" ? "claude" : null;
         if (!kind) continue;
-        const review = await extractSessionReview(path, kind);
+
+        let review: Awaited<ReturnType<typeof extractSessionReview>> | null = null;
+        const st = await stat(path).catch(() => null);
+        if (st) review = cache.get(path, st.mtimeMs, st.size);
+        if (!review) {
+          review = await extractSessionReview(path, kind);
+          if (st) cache.set(path, st.mtimeMs, st.size, review);
+        }
         s.title = review.title;
         s.userTurns = review.userTurns;
         s.turns = review.turns;
@@ -504,6 +534,7 @@ export async function enrichSessionDetails(
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, () => worker()));
+  cache.save();
 }
 
 /** Short display path for UI */

@@ -4,7 +4,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { Command } from "commander";
 import type { Lang } from "./types.js";
 import { resolveDateRange } from "./dates.js";
-import { collectAll, getProviders, providers } from "./providers/index.js";
+import { collectAll, getProviders, providers, IMPLEMENTED } from "./providers/index.js";
 import { aggregate } from "./aggregate.js";
 import { buildAdvice, buildInventory, sessionFindings } from "./advice/index.js";
 import {
@@ -21,32 +21,83 @@ import { enrichSessionDetails } from "./session-detail.js";
 
 const program = new Command();
 
+const IMPLEMENTED_PROVIDERS = providers.filter((p) => IMPLEMENTED.has(p.id));
+
 program
   .name("tokusage")
-  .description("Analyze local AI coding agent token usage, cost, and optimization tips")
-  .version("0.2.0")
-  .argument("[day]", "YYYY-MM-DD (default: today)")
-  .option("--from <date>", "Range start YYYY-MM-DD")
-  .option("--to <date>", "Range end YYYY-MM-DD")
-  .option("--all", "All sessions", false)
-  .option("--lang <lang>", "en | vi", "en")
-  .option("--provider <list>", "Comma-separated provider ids")
-  .option("--json", "JSON output (skips terminal + HTML)", false)
-  .option("--no-html", "Skip writing the HTML report (HTML is on by default)")
+  .description(
+    "Analyze local AI coding agent token usage, cost, and optimization tips.\n" +
+      "Reads session logs already on disk (Claude Code, Codex, Gemini CLI, Cursor, Copilot, ...).\n" +
+      "100% local: no API keys, no network calls, nothing uploaded.",
+  )
+  .version("0.2.0", "-V, --version", "output the installed tokusage version")
+  .argument("[day]", "report for one day, YYYY-MM-DD (default: today)")
+  .option("--from <date>", "range start, YYYY-MM-DD (use with --to)")
+  .option("--to <date>", "range end, YYYY-MM-DD (use with --from)")
+  .option("--all", "every session ever recorded, ignores day/--from/--to", false)
+  .option("--lang <lang>", "output language: en | vi", "en")
+  .option(
+    "--provider <list>",
+    `comma-separated provider ids to include, e.g. claude,codex (see: tokusage detect)`,
+  )
+  .option("--json", "print machine-readable JSON instead of the terminal report; skips the HTML report", false)
+  .option("--no-html", "skip writing the HTML report (an HTML report is written by default)")
   .option(
     "--out <file>",
-    "HTML output path (default: ~/.local/state/tokusage/reports/report-<range>-<timestamp>.html)",
+    "HTML report path (default: ~/.local/state/tokusage/reports/report-<range>-<timestamp>.html)",
   )
-  .option("--top <n>", "Top sessions (terminal); HTML includes all sessions", "10")
+  .option("--top <n>", "how many sessions to list in the terminal report; the HTML report always lists all", "10")
   .action(async (day: string | undefined, opts) => {
     await runReport({ day, ...opts });
-  });
+  })
+  .addHelpText(
+    "after",
+    `
+This is the default command ("report") — running "tokusage" with no subcommand is the same
+as "tokusage report". It prints a terminal summary and writes a drill-down HTML report.
+
+Examples:
+  $ tokusage                                Today's usage: terminal + HTML report
+  $ tokusage 2026-07-01                     Report for a single day
+  $ tokusage --from 2026-07-01 --to 2026-07-09
+  $ tokusage --all --provider claude,codex  Everything ever recorded, filtered by provider
+  $ tokusage --all --json > report.json     Machine-readable, no HTML written
+  $ tokusage --out ./report.html --all      Choose where the HTML report is saved
+
+Other commands:
+  $ tokusage detect                         Which providers have local data on this machine
+  $ tokusage advice --all                   Just the ranked optimization findings
+  $ tokusage inventory --all                MCP/skills declared vs. actually used
+  $ tokusage session <id> --all             Deep-dive a single session (id prefix ok)
+
+Providers with real usage data (${IMPLEMENTED_PROVIDERS.length}): ${IMPLEMENTED_PROVIDERS.map((p) => p.id).join(", ")}
+  ~${providers.length - IMPLEMENTED_PROVIDERS.length} more are path-detected only — run "tokusage detect" for the full list.
+
+Env vars:
+  TOKWISE_STATE_DIR / XDG_STATE_HOME   Where HTML reports are written (default state dir)
+  TOKWISE_CONFIG_DIR / XDG_CONFIG_HOME Where pricing.json overrides are read from
+  TOKWISE_PRICING_FILE                 Override the pricing.json path directly
+  TOKWISE_NO_CACHE=1                   Disable the parsed-events cache in ~/.cache/tokusage
+
+Docs: https://github.com/0xsyncroot/tokwise#readme
+`,
+  );
 
 program
   .command("detect")
-  .description("List providers and whether local data was found")
-  .option("--lang <lang>", "en | vi", "en")
-  .option("--json", "JSON output", false)
+  .description("List every known provider and whether local usage data was found for it")
+  .option("--lang <lang>", "output language: en | vi", "en")
+  .option("--json", "print machine-readable JSON instead of a table", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  $ tokusage detect                 Table of every provider id + found paths
+  $ tokusage detect --json          Same data as JSON (id, name, quality, found, paths)
+
+Use the "id" column with --provider on other commands, e.g. --provider claude,codex.
+`,
+  )
   .action((opts) => {
     const lang = (opts.lang as Lang) || "en";
     if (opts.json) {
@@ -67,14 +118,23 @@ program
 
 program
   .command("advice")
-  .description("Ranked optimization findings for a date range")
-  .argument("[day]", "YYYY-MM-DD (default: today)")
-  .option("--from <date>", "Range start")
-  .option("--to <date>", "Range end")
-  .option("--all", "All sessions", false)
-  .option("--lang <lang>", "en | vi", "en")
-  .option("--provider <list>", "Comma-separated provider ids")
-  .option("--json", "JSON output", false)
+  .description("Ranked optimization findings only (no full report, no HTML)")
+  .argument("[day]", "report for one day, YYYY-MM-DD (default: today)")
+  .option("--from <date>", "range start, YYYY-MM-DD (use with --to)")
+  .option("--to <date>", "range end, YYYY-MM-DD (use with --from)")
+  .option("--all", "every session ever recorded, ignores day/--from/--to", false)
+  .option("--lang <lang>", "output language: en | vi", "en")
+  .option("--provider <list>", "comma-separated provider ids to include, e.g. claude,codex")
+  .option("--json", "print machine-readable JSON instead of the terminal list", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  $ tokusage advice                 Findings for today
+  $ tokusage advice --all           Findings across everything ever recorded
+  $ tokusage advice --from 2026-07-01 --to 2026-07-09 --json
+`,
+  )
   .action(async (day, opts) => {
     const lang = (opts.lang as Lang) || "en";
     const range = resolveDateRange({
@@ -99,14 +159,22 @@ program
 
 program
   .command("inventory")
-  .description("MCP/skills declared vs used + on/off advice")
-  .argument("[day]", "YYYY-MM-DD (default: today)")
-  .option("--from <date>", "Range start")
-  .option("--to <date>", "Range end")
-  .option("--all", "All sessions", false)
-  .option("--lang <lang>", "en | vi", "en")
-  .option("--provider <list>", "Comma-separated provider ids")
-  .option("--json", "JSON output", false)
+  .description("MCP servers/skills declared vs. actually used, with on/off advice")
+  .argument("[day]", "report for one day, YYYY-MM-DD (default: today)")
+  .option("--from <date>", "range start, YYYY-MM-DD (use with --to)")
+  .option("--to <date>", "range end, YYYY-MM-DD (use with --from)")
+  .option("--all", "every session ever recorded, ignores day/--from/--to", false)
+  .option("--lang <lang>", "output language: en | vi", "en")
+  .option("--provider <list>", "comma-separated provider ids to include, e.g. claude,codex")
+  .option("--json", "print machine-readable JSON instead of the terminal list", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  $ tokusage inventory              Declared vs. used MCP/skills for today
+  $ tokusage inventory --all        Same, across everything ever recorded
+`,
+  )
   .action(async (day, opts) => {
     const lang = (opts.lang as Lang) || "en";
     const range = resolveDateRange({
@@ -130,14 +198,25 @@ program
 
 program
   .command("session")
-  .description("Deep-dive one session")
-  .argument("<id>", "Session id (prefix ok)")
-  .option("--from <date>", "Range start")
-  .option("--to <date>", "Range end")
-  .option("--all", "Search all sessions", true)
-  .option("--lang <lang>", "en | vi", "en")
-  .option("--provider <list>", "Comma-separated provider ids")
-  .option("--json", "JSON output", false)
+  .description("Deep-dive one session: turn-by-turn tokens, cost, and findings")
+  .argument("<id>", "session id, a prefix of it, or 'provider::sessionId'")
+  .option("--from <date>", "narrow the search to a range start, YYYY-MM-DD")
+  .option("--to <date>", "narrow the search to a range end, YYYY-MM-DD")
+  .option("--all", "search every session ever recorded", true)
+  .option("--lang <lang>", "output language: en | vi", "en")
+  .option("--provider <list>", "comma-separated provider ids to search, e.g. claude,codex")
+  .option("--json", "print machine-readable JSON instead of the terminal view", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  $ tokusage session 8f3a              Look up by id prefix (searches all sessions)
+  $ tokusage session claude::8f3a...   Disambiguate with 'provider::sessionId'
+  $ tokusage session 8f3a --json
+
+Tip: run "tokusage --all --json" or the HTML report first to find session ids.
+`,
+  )
   .action(async (id, opts) => {
     const lang = (opts.lang as Lang) || "en";
     const range = resolveDateRange({
